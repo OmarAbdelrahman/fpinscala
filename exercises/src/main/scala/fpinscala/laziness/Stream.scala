@@ -69,7 +69,7 @@ trait Stream[+A] {
   }
 
   def filter(p: A => Boolean): Stream[A] = {
-    ???
+    foldRight(empty[A])((a, acc) => if (p(a)) cons(a, acc) else acc)
   }
 
   def startsWith[B](s: Stream[B]): Boolean = {
@@ -149,5 +149,8 @@ object Stream {
 
     println(stream.map(_ * 2).toListIterative)
     println(stream.map(_ + 5).toListIterative)
+
+    println("filter 1 = " + stream.filter(_ % 2 == 0).toListIterative)
+    println("filter 2 = " + stream.filter(_ % 2 != 0).toListIterative)
   }
 }
