@@ -1,7 +1,7 @@
 package fpinscala.laziness
 
 import Stream._
-
+import scala.{Stream => _}
 import scala.collection.mutable.ListBuffer
 
 trait Stream[+A] {
@@ -72,6 +72,18 @@ trait Stream[+A] {
     foldRight(empty[A])((a, acc) => if (p(a)) cons(a, acc) else acc)
   }
 
+  def append[B >: A](stream: => Stream[B]): Stream[B] = {
+    foldRight(stream)(cons(_, _))
+  }
+
+  def flatMap[B](f: A => Stream[B]): Stream[B] = {
+    foldRight(empty[B])(f(_).append(_))
+  }
+
+  def findWithFilter(p: A => Boolean): Option[A] = {
+    filter(p).headOptionWithFold
+  }
+
   def startsWith[B](s: Stream[B]): Boolean = {
     ???
   }
@@ -121,36 +133,33 @@ object Stream {
     Stream.cons(1, ones)
   }
 
-  def from(n: Int): Stream[Int] = {
-    ???
+  def constant_1[A](a: A): Stream[A] = {
+    Stream.cons(a, constant_1(a))
   }
+
+  def constant[A](a: A): Stream[A] = {
+    lazy val result: Stream[A] = Cons(() => a, () => result)
+    result
+  }
+
+  val fibs: Stream[Int] = {
+    def doIt(a: Int, b: Int): Stream[Int] = {
+      cons(a, doIt(b, a + b))
+    }
+    doIt(0, 1)
+  }
+
+  def from(n: Int): Stream[Int] = {
+    cons(n, from(n + 1))
+  }
+
   def unfold[A, S](z: S)(f: S => Option[(A, S)]): Stream[A] = {
-    ???
+    f(z) match {
+      case _ => ???
+    }
   }
 
   def main(args: Array[String]): Unit = {
-    val stream = cons(1, cons(2, cons(3, cons(4, cons(5, empty)))))
-
-    println(stream.toListRecursive)
-    println(stream.toList)
-    println(stream.toListIterative)
-
-    println(stream.drop(3).toListIterative)
-    println(stream.take(3).toListIterative)
-
-    println("take while 1 = " + stream.takeWhile(_ < 3).toListIterative)
-    println("take while 2 = " + stream.takeWhileWithFold(_ < 3).toListIterative)
-
-    println(stream.forAll(_ < 6))
-    println(stream.forAll(_ < 3))
-
-    println(stream.headOption)
-    println(stream.headOptionWithFold)
-
-    println(stream.map(_ * 2).toListIterative)
-    println(stream.map(_ + 5).toListIterative)
-
-    println("filter 1 = " + stream.filter(_ % 2 == 0).toListIterative)
-    println("filter 2 = " + stream.filter(_ % 2 != 0).toListIterative)
+    println("fibs = " + fibs.take(10).toListIterative)
   }
 }

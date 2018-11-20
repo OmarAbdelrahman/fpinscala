@@ -173,7 +173,7 @@ object List { // `List` companion object. Contains functions for creating and wo
     }
   }
 
-  def hasSubsequence[A](sup: List[A], sub: List[A]): Boolean = {
+  def hasSubSequence[A](sup: List[A], sub: List[A]): Boolean = {
     (sup, sub) match {
       case (Cons(x, xt), Cons(y, yt)) => ???
       case _ => false
