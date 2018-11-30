@@ -149,17 +149,18 @@ object Stream {
     doIt(0, 1)
   }
 
+//  val fibsWithUnfold: Stream[Int] = {
+//    ???
+//  }
+
   def from(n: Int): Stream[Int] = {
     cons(n, from(n + 1))
   }
 
   def unfold[A, S](z: S)(f: S => Option[(A, S)]): Stream[A] = {
-    f(z) match {
-      case _ => ???
+    f(z).fold(empty[A]) { next =>
+      val (a, s) = next
+      cons(a, unfold(s)(f))
     }
-  }
-
-  def main(args: Array[String]): Unit = {
-    println("fibs = " + fibs.take(10).toListIterative)
   }
 }
