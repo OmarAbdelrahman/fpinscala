@@ -1,6 +1,5 @@
 package fpinscala.state
 
-
 trait RNG {
   def nextInt: (Int, RNG) // Should generate a random `Int`. We'll later define other functions in terms of `nextInt`.
 }
@@ -151,6 +150,31 @@ case object Turn extends Input
 
 case class Machine(locked: Boolean, candies: Int, coins: Int)
 
+object Candy {
+  def update: Input => Machine => Machine = (input: Input) => (machineState: Machine) => {
+    (input, machineState) match  {
+      case (_, Machine(_, 0, _))        => machineState
+      case (Coin, Machine(false, _, _)) => machineState
+      case (Turn, Machine(true, _, _))  => machineState
+
+      case (Coin, Machine(true, candy, coin)) =>
+        Machine(locked = false, candy, coin + 1)
+
+      case (Turn, Machine(false, candy, coin)) =>
+        Machine(locked = true, candy - 1, coin)
+    }
+  }
+
+  def simulateMachine(inputs: List[Input]): State[Machine, (Int, Int)] = {
+    for {
+      _ <- State.sequence(inputs.map((State.modify[Machine] _).compose(update)))
+      machine <- State.get[Machine]
+    } yield {
+      machine.coins -> machine.candies
+    }
+  }
+}
+
 object State {
   type Rand[A] = State[RNG, A]
 
@@ -162,7 +186,7 @@ object State {
     sequence.foldRight(unit[S, List[A]](List.empty))((elem, acc) => elem.map2(acc)(_ :: _))
   }
 
-  def sequence[S, A](sequence: List[State[S, A]]): State[S, List[A]] = {
+  def sequenceViaTailRecursion[S, A](sequence: List[State[S, A]]): State[S, List[A]] = {
     @annotation.tailrec
     def doIt(state: S, actions: List[State[S, A]], result: List[A]): (List[A], S) = actions match {
       case Nil =>
@@ -174,7 +198,7 @@ object State {
     State(state => doIt(state, sequence, List.empty[A]))
   }
 
-  def sequenceViaFoldLeft[S, A](sequence: List[State[S, A]]): State[S, List[A]] = {
+  def sequence[S, A](sequence: List[State[S, A]]): State[S, List[A]] = {
     sequence.reverse.foldLeft(unit[S, List[A]](List.empty))((acc, elem) => elem.map2(acc)(_ :: _))
   }
 
@@ -182,8 +206,13 @@ object State {
   def set[S](state: S): State[S, Unit] = State(_ => () -> state)
 
   def modify[S](f: S => S): State[S, Unit] = {
-    for { state <- get } yield set(f(state))
+    get.flatMap(s => set(f(s)))
   }
 
-  def simulateMachine(inputs: List[Input]): State[Machine, (Int, Int)] = ???
+  def modifyWithForComprehension[S](f: S => S): State[S, Unit] = {
+    for {
+      s <- get
+      _ <- set(f(s))
+    } yield ()
+  }
 }
