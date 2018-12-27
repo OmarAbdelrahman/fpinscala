@@ -151,6 +151,8 @@ case object Turn extends Input
 case class Machine(locked: Boolean, candies: Int, coins: Int)
 
 object Candy {
+  import State._
+
   def update: Input => Machine => Machine = (input: Input) => (machineState: Machine) => {
     (input, machineState) match  {
       case (_, Machine(_, 0, _))        => machineState
@@ -166,9 +168,11 @@ object Candy {
   }
 
   def simulateMachine(inputs: List[Input]): State[Machine, (Int, Int)] = {
+    val machineStates = inputs.map(update)
+    val modifiedMachines = machineStates.map(modify)
     for {
-      _ <- State.sequence(inputs.map((State.modify[Machine] _).compose(update)))
-      machine <- State.get[Machine]
+      _ <- sequence(modifiedMachines)
+      machine <- get
     } yield {
       machine.coins -> machine.candies
     }
