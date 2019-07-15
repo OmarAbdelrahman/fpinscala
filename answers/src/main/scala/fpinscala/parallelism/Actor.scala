@@ -36,7 +36,7 @@ import annotation.tailrec
  * @param strategy Execution strategy, for example, a strategy that is backed by an `ExecutorService`
  * @tparam A       The type of messages accepted by this actor.
  */
-final class Actor[A](strategy: Strategy)(handler: A => Unit, onError: Throwable => Unit = throw(_)) {
+final class Actor[A](strategy: Strategy)(handler: A => Unit, onError: Throwable => Unit = throw _) {
   self =>
 
   private val tail = new AtomicReference(new Node[A]())
@@ -56,7 +56,7 @@ final class Actor[A](strategy: Strategy)(handler: A => Unit, onError: Throwable 
   }
 
   def contramap[B](f: B => A): Actor[B] =
-    new Actor[B](strategy)((b: B) => (this ! f(b)), onError)
+    new Actor[B](strategy)((b: B) => this ! f(b), onError)
 
   private def trySchedule() {
     if (suspended.compareAndSet(1, 0)) schedule()
@@ -120,7 +120,7 @@ object Strategy {
    */
   def fromExecutorService(es: ExecutorService): Strategy = new Strategy {
     def apply[A](a: => A): () => A = {
-      val f = es.submit { new Callable[A] { def call = a} }
+      val f = es.submit { new Callable[A] { def call: A = a} }
       () => f.get
     }
   }

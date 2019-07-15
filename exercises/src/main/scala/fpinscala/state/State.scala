@@ -36,6 +36,11 @@ object RNG {
     }
   }
 
+  def boolean: Rand[Boolean] = rng => {
+    val (v, nextRng) = rng.nextInt
+    (v % 2 == 0) -> nextRng
+  }
+
   def nonNegativeInt: Rand[Int] = rng => {
     val (v, newRng) = rng.nextInt
     val nonNegative = if (v < 0) -(v + 1) else v
