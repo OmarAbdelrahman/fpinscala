@@ -58,6 +58,21 @@ object Prop {
     Prop((_, n, rng) => f(n, rng))
   }
 
+  def forAll[A](g: SGen[A])(f: A => Boolean): Prop = {
+    forAll(g(_))(f)
+  }
+
+  def forAll[A](gen: Int => Gen[A])(f: A => Boolean): Prop = Prop { (max, n, rng) =>
+    val casesPerSize = (n + (max - 1)) / max
+    val props: Stream[Prop] = Stream.from(0).take((n min max) + 1).map(i => forAll(gen(i))(f))
+    val prop: Prop = props.map { p =>
+      Prop { (max, _, rng) =>
+        p.run(max, casesPerSize, rng)
+      }
+    }.toList.reduce(_ && _)
+    prop.run(max, n, rng)
+  }
+
   def forAll[A](gen: Gen[A])(f: A => Boolean): Prop = Prop { (n, rng) =>
     randomStream(gen)(rng)
       .zip(Stream.from(0))
@@ -75,6 +90,22 @@ object Prop {
     s"test case: $s\n" +
     s"generated an exception: ${e.getMessage}\n" +
     s"stack trace:\n ${e.getStackTrace.mkString("\n")}"
+  }
+
+  def run(
+    p: Prop,
+    maxSize: MaxSize = 100,
+    testCases: TestCases = 100,
+    rng: RNG = RNG.Simple(System.currentTimeMillis)
+  ): Unit = {
+    p.run(maxSize, testCases, rng) match {
+      case Falsified(msg, count) =>
+        println(s"! Falsified after $count passed tests:\n $msg")
+      case Passed =>
+        println(s"+ OK, passed $testCases tests.")
+      case Proved =>
+        println(s"+ OK, proved property.")
+    }
   }
 
   private def toTestResult[A](f: A => Boolean): ((A, SuccessCount)) => Result = {
@@ -103,6 +134,14 @@ object Gen {
     Gen(State.sequence(List.fill(n)(gen.sample)))
   }
 
+  def listOf[A](gen: Gen[A]): SGen[List[A]] = {
+    SGen(n => listOfN(n, gen))
+  }
+
+  def listOf1[A](gen: Gen[A]): SGen[List[A]] = {
+    SGen(n => listOfN(n max 1, gen))
+  }
+
   def union[A](g1: Gen[A], g2: Gen[A]): Gen[A] = {
     boolean.flatMap(b => if (b) g1 else g2)
   }
@@ -123,6 +162,14 @@ case class Gen[A](sample: State[RNG, A]) {
 
   def listOfN(size: Gen[Int]): Gen[List[A]] = {
     size.flatMap(listSize => Gen.listOfN(listSize, this))
+  }
+
+  def listOf: SGen[List[A]] = {
+    Gen.listOf(this)
+  }
+
+  def listOf1: SGen[List[A]] = {
+    Gen.listOf1(this)
   }
 
   def unSized: SGen[A] = {
