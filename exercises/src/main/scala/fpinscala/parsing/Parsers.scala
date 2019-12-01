@@ -39,24 +39,22 @@ case class Location(input: String, offset: Int = 0) {
 //)
 
 trait Parsers[ParseError, Parser[+_]] { self =>
-
   def char(ch: Char): Parser[Char]
   def or[A](a: Parser[A], b: Parser[A]): Parser[A]
   def run[A](parser: Parser[A])(input: String): Either[ParseError, A]
   def listOfN[A](n: Int, parser: Parser[A]): Parser[List[A]]
+  def many[A](parser: Parser[A]): Parser[List[A]]
+  def map[A, B](parser: Parser[A])(f: A => B): Parser[B]
 
-  implicit def string(str: String): Parser[String]
+  implicit def string(string: String): Parser[String]
+  implicit def operators[A](parser: Parser[A]): ParserOps[A] = ParserOps[A](parser)
   implicit def asStringParser[A](a: A)(implicit f: A => Parser[String]): ParserOps[String] = {
     ParserOps(f(a))
   }
 
-  def many[A](parser: Parser[A]): Parser[List[A]]
-  def map[A, B](parser: Parser[A])(f: A => B): Parser[B]
-
   case class ParserOps[A](parser: Parser[A]) {
     def |[B >: A](p: Parser[B]): Parser[B] = self.or(parser, p)
     def or[B >: A](p: => Parser[B]): Parser[B] = self.or(parser, p)
-
     def map[B](f: A => B): Parser[B] = self.map(parser)(f)
     def many: Parser[List[A]] = self.many(parser)
   }

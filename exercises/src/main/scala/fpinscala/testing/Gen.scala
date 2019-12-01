@@ -12,15 +12,33 @@ The library developed in this chapter goes through several iterations. This file
 shell, which you can fill in and modify while working through the chapter.
 */
 
-case class Prop(run: (TestCases, RNG) => Result) {
-  def &&(p: Prop): Prop = ???
+case class Prop(run: (MaxSize, TestCases, RNG) => Result) {
+  def && (p: Prop): Prop = Prop { (max, n, rng) =>
+    run(max, n, rng) match {
+      case Passed | Proved => p.run(max, n, rng)
+      case x => x
+    }
+  }
 
-  def ||(p: Prop): Prop = ???
+  def || (p: Prop): Prop = Prop { (max, n, rng) =>
+    run(max, n, rng) match {
+      case Falsified(msg, _) => p.tag(msg).run(max, n, rng)
+      case x => x
+    }
+  }
+
+  def tag(msg: String): Prop = Prop {
+    (max, n, rng) => run(max, n, rng) match {
+      case Falsified(failedCase, successCount) => Falsified(msg + "\n" + failedCase, successCount)
+      case x => x
+    }
+  }
 }
 
 object Prop {
   type TestCases = Int
   type FailedCase = String
+  type MaxSize = Int
   type SuccessCount = Int
 
   sealed trait Result {
@@ -32,15 +50,21 @@ object Prop {
   case class Falsified(failure: FailedCase, successes: SuccessCount) extends Result {
     override def isFalsified: Boolean = true
   }
+  case object Proved extends Result {
+    override def isFalsified: Boolean = false
+  }
 
-  def forAll[A](gen: Gen[A])(f: A => Boolean): Prop = Prop {
-    (n, rng) => randomStream(gen)(rng).zip(Stream.from(0)).take(n).map {
-      case (a, i) => try {
-        if (f(a)) Passed else Falsified(a.toString, i)
-      } catch {
-        case e: Exception => Falsified(buildMsg(a, e), i)
-      }
-    }.find(_.isFalsified).getOrElse(Passed)
+  def apply(f: (TestCases, RNG) => Result): Prop = {
+    Prop((_, n, rng) => f(n, rng))
+  }
+
+  def forAll[A](gen: Gen[A])(f: A => Boolean): Prop = Prop { (n, rng) =>
+    randomStream(gen)(rng)
+      .zip(Stream.from(0))
+      .take(n)
+      .map(toTestResult(f))
+      .find(_.isFalsified)
+      .getOrElse(Passed)
   }
 
   def randomStream[A](g: Gen[A])(rng: RNG): Stream[A] = {
@@ -51,6 +75,14 @@ object Prop {
     s"test case: $s\n" +
     s"generated an exception: ${e.getMessage}\n" +
     s"stack trace:\n ${e.getStackTrace.mkString("\n")}"
+  }
+
+  private def toTestResult[A](f: A => Boolean): ((A, SuccessCount)) => Result = {
+    case (a, i) => try {
+      if (f(a)) Passed else Falsified(a.toString, i)
+    } catch {
+      case e: Exception => Falsified(buildMsg(a, e), i)
+    }
   }
 }
 
@@ -92,9 +124,5 @@ case class Gen[A](sample: State[RNG, A]) {
   def listOfN(size: Gen[Int]): Gen[List[A]] = {
     size.flatMap(listSize => Gen.listOfN(listSize, this))
   }
-}
-
-trait SGen[+A] {
-
 }
 
