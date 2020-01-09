@@ -10,26 +10,27 @@ import java.util.concurrent.{ExecutorService, Executors}
 /*
 The library developed in this chapter goes through several iterations. This file is just the
 shell, which you can fill in and modify while working through the chapter.
-*/
+ */
 
 case class Prop(run: (MaxSize, TestCases, RNG) => Result) {
-  def && (p: Prop): Prop = Prop { (max, n, rng) =>
+  def &&(p: Prop): Prop = Prop { (max, n, rng) =>
     run(max, n, rng) match {
       case Passed | Proved => p.run(max, n, rng)
-      case x => x
+      case x               => x
     }
   }
 
-  def || (p: Prop): Prop = Prop { (max, n, rng) =>
+  def ||(p: Prop): Prop = Prop { (max, n, rng) =>
     run(max, n, rng) match {
       case Falsified(msg, _) => p.tag(msg).run(max, n, rng)
-      case x => x
+      case x                 => x
     }
   }
 
-  def tag(msg: String): Prop = Prop {
-    (max, n, rng) => run(max, n, rng) match {
-      case Falsified(failedCase, successCount) => Falsified(msg + "\n" + failedCase, successCount)
+  def tag(msg: String): Prop = Prop { (max, n, rng) =>
+    run(max, n, rng) match {
+      case Falsified(failedCase, successCount) =>
+        Falsified(msg + "\n" + failedCase, successCount)
       case x => x
     }
   }
@@ -65,11 +66,12 @@ object Prop {
   def forAll[A](gen: Int => Gen[A])(f: A => Boolean): Prop = Prop { (max, n, rng) =>
     val casesPerSize = (n + (max - 1)) / max
     val props: Stream[Prop] = Stream.from(0).take((n min max) + 1).map(i => forAll(gen(i))(f))
-    val prop: Prop = props.map { p =>
-      Prop { (max, _, rng) =>
-        p.run(max, casesPerSize, rng)
+    val prop: Prop = props
+      .map { p =>
+        Prop((max, _, rng) => p.run(max, casesPerSize, rng))
       }
-    }.toList.reduce(_ && _)
+      .toList
+      .reduce(_ && _)
     prop.run(max, n, rng)
   }
 
@@ -88,8 +90,8 @@ object Prop {
 
   def buildMsg[A](s: A, e: Exception): String = {
     s"test case: $s\n" +
-    s"generated an exception: ${e.getMessage}\n" +
-    s"stack trace:\n ${e.getStackTrace.mkString("\n")}"
+      s"generated an exception: ${e.getMessage}\n" +
+      s"stack trace:\n ${e.getStackTrace.mkString("\n")}"
   }
 
   def run(
@@ -109,11 +111,12 @@ object Prop {
   }
 
   private def toTestResult[A](f: A => Boolean): ((A, SuccessCount)) => Result = {
-    case (a, i) => try {
-      if (f(a)) Passed else Falsified(a.toString, i)
-    } catch {
-      case e: Exception => Falsified(buildMsg(a, e), i)
-    }
+    case (a, i) =>
+      try {
+        if (f(a)) Passed else Falsified(a.toString, i)
+      } catch {
+        case e: Exception => Falsified(buildMsg(a, e), i)
+      }
   }
 }
 
@@ -147,7 +150,7 @@ object Gen {
   }
 }
 
-case class Gen[A](sample: State[RNG, A]) {
+case class Gen[+A](sample: State[RNG, A]) {
   def map[B](f: A => B): Gen[B] = {
     Gen(sample.map(f))
   }
@@ -177,7 +180,7 @@ case class Gen[A](sample: State[RNG, A]) {
   }
 }
 
-case class SGen[A](forSize: Int => Gen[A]) {
+case class SGen[+A](forSize: Int => Gen[A]) {
   def apply(n: Int): Gen[A] = {
     forSize(n)
   }
@@ -193,4 +196,3 @@ case class SGen[A](forSize: Int => Gen[A]) {
     SGen(g)
   }
 }
-
