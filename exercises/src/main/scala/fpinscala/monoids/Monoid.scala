@@ -54,18 +54,40 @@ object Monoid {
   def firstOptionMonoid[A]: Monoid[Option[A]] = optionMonoid[A]
   def lastOptionMonoid[A]: Monoid[Option[A]] = dual(firstOptionMonoid)
 
-  def endoMonoid[A]: Monoid[A => A] = ???
+  def endoMonoid[A]: Monoid[A => A] = new Monoid[A => A] {
+    override def op(a1: A => A, a2: A => A): A => A = a1.compose(a2)
+    override def zero: A => A = a => a
+  }
+
+  def composeMonoid[A]: Monoid[A => A] = endoMonoid[A]
+  def andThenMonoid[A]: Monoid[A => A] = dual(composeMonoid)
 
   // TODO: Placeholder for `Prop`. Remove once you have implemented the `Prop`
   // data type from Part 2.
-  trait Prop {}
 
   // TODO: Placeholder for `Gen`. Remove once you have implemented the `Gen`
   // data type from Part 2.
 
   import fpinscala.testing._
   import Prop._
-  def monoidLaws[A](m: Monoid[A], gen: Gen[A]): Prop = ???
+
+  def monoidLaws[A](monoid: Monoid[A], gen: Gen[A]): Prop = {
+    val tupledGenerator = for {
+      x <- gen
+      y <- gen
+      z <- gen
+    } yield {
+      (x, y, z)
+    }
+    val associativityProp = Prop.forAll(tupledGenerator) {
+      case (a, b, c) =>
+        monoid.op(monoid.op(a, b), c) == monoid.op(a, monoid.op(b, c))
+    }
+    val identityProp = Prop.forAll(gen) { a =>
+      monoid.op(monoid.zero, a) == a && monoid.op(a, monoid.zero) == a
+    }
+    associativityProp && identityProp
+  }
 
   def trimMonoid(s: String): Monoid[String] = ???
 
