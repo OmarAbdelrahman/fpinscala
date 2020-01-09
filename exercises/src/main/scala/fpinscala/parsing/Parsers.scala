@@ -13,13 +13,17 @@ case class Location(input: String, offset: Int = 0) {
     ParseError(List(this -> msg))
   }
 
-  def advanceBy(n: Int): Location = copy(offset = offset + n)
+  def advanceBy(n: Int): Location = {
+    copy(offset = offset + n)
+  }
 
   /* Returns the line corresponding to this location */
   def currentLine: String = {
     if (input.length > 1) input.lines.drop(line - 1).next
     else ""
   }
+
+  def columnCaret: String = (" " * (col - 1)) + "^"
 }
 
 case class ParseError(stack: List[(Location, String)] = List())
