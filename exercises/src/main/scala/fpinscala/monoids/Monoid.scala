@@ -10,7 +10,6 @@ trait Monoid[A] {
 }
 
 object Monoid {
-
   val stringMonoid: Monoid[String] = new Monoid[String] {
     override def op(a1: String, a2: String): String = a1 + a2
     override val zero = ""
@@ -85,20 +84,30 @@ object Monoid {
 
   def trimMonoid(s: String): Monoid[String] = ???
 
-  def concatenate[A](as: List[A], m: Monoid[A]): A =
-    ???
+  def concatenate[A](as: List[A], monoid: Monoid[A]): A = {
+    as.foldLeft(monoid.zero)(monoid.op)
+  }
 
-  def foldMap[A, B](as: List[A], m: Monoid[B])(f: A => B): B =
-    ???
+  def foldMap[A, B](as: List[A], monoid: Monoid[B])(f: A => B): B = {
+    as.foldLeft(monoid.zero)((b, a) => monoid.op(b, f(a)))
+  }
 
-  def foldRight[A, B](as: List[A])(z: B)(f: (A, B) => B): B =
-    ???
+  def foldRight[A, B](as: List[A])(z: B)(f: (A, B) => B): B = {
+    foldMap(as, composeMonoid[B])(f.curried)(z)
+  }
 
-  def foldLeft[A, B](as: List[A])(z: B)(f: (B, A) => B): B =
-    ???
+  def foldLeft[A, B](as: List[A])(z: B)(f: (B, A) => B): B = {
+    foldMap(as, andThenMonoid[B])(a => b => f(b, a))(z)
+  }
 
-  def foldMapV[A, B](as: IndexedSeq[A], m: Monoid[B])(f: A => B): B =
-    ???
+  def foldMapV[A, B](as: IndexedSeq[A], monoid: Monoid[B])(f: A => B): B = {
+    if (as.isEmpty) monoid.zero
+    else if (as.length == 1) f(as.head)
+    else {
+      val (left, right) = as.splitAt(as.length / 2)
+      monoid.op(foldMapV(left, monoid)(f), foldMapV(right, monoid)(f))
+    }
+  }
 
   def ordered(ints: IndexedSeq[Int]): Boolean =
     ???
@@ -107,11 +116,14 @@ object Monoid {
   case class Stub(chars: String)                            extends WC
   case class Part(lStub: String, words: Int, rStub: String) extends WC
 
-  def par[A](m: Monoid[A]): Monoid[Par[A]] =
-    ???
+  def par[A](monoid: Monoid[A]): Monoid[Par[A]] = new Monoid[Par[A]] {
+    override def op(a1: Par[A], a2: Par[A]): Par[A] = a1.map2(a2)(monoid.op)
+    override def zero: Par[A] = Par.unit(monoid.zero)
+  }
 
-  def parFoldMap[A, B](v: IndexedSeq[A], m: Monoid[B])(f: A => B): Par[B] =
+  def parFoldMap[A, B](v: IndexedSeq[A], monoid: Monoid[B])(f: A => B): Par[B] = {
     ???
+  }
 
   val wcMonoid: Monoid[WC] = ???
 
