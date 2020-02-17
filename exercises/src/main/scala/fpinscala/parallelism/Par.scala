@@ -22,12 +22,12 @@ object Par {
   def unit[A](a: A): Par[A] = (_: ExecutorService) => {
     UnitFuture(a)
   }
-  
+
   private case class UnitFuture[A](get: A) extends Future[A] {
-    def isDone = true 
+    def isDone = true
     def get(timeout: Long, units: TimeUnit): A = get
-    def isCancelled = false 
-    def cancel(evenIfRunning: Boolean): Boolean = false 
+    def isCancelled = false
+    def cancel(evenIfRunning: Boolean): Boolean = false
   }
 
   // Combines the results of two parallel computations with a binary function.
@@ -45,13 +45,14 @@ object Par {
     * @tparam A
     * @return Par[A]
     */
-  def fork[A](a: => Par[A]): Par[A] = es => { // This is the simplest and most natural implementation of `fork`, but there are some problems with it--for one, the outer `Callable` will block waiting for the "inner" task to complete. Since this blocking occupies a thread in our thread pool, or whatever resource backs the `ExecutorService`, this implies that we're losing out on some potential parallelism. Essentially, we're using two threads when one should suffice. This is a symptom of a more serious problem with the implementation, and we will discuss this later in the chapter.
-    es.submit {
-      new Callable[A] {
-        def call: A = a(es).get
+  def fork[A](a: => Par[A]): Par[A] =
+    es => { // This is the simplest and most natural implementation of `fork`, but there are some problems with it--for one, the outer `Callable` will block waiting for the "inner" task to complete. Since this blocking occupies a thread in our thread pool, or whatever resource backs the `ExecutorService`, this implies that we're losing out on some potential parallelism. Essentially, we're using two threads when one should suffice. This is a symptom of a more serious problem with the implementation, and we will discuss this later in the chapter.
+      es.submit {
+        new Callable[A] {
+          def call: A = a(es).get
+        }
       }
     }
-  }
 
   // Wraps it's unevaluated argument in a `Par` and marks it for concurrent evaluation.
   def lazyUnit[A](a: => A): Par[A] = {
@@ -91,9 +92,14 @@ object Par {
     else f(es)
   }
 
+  def flatMap[A, B](p: Par[A])(choices: A => Par[B]): Par[B] = es => {
+    val k = run(es)(p).get
+    run(es)(choices(k))
+  }
+
   /* Gives us infix syntax for `Par`. */
   implicit def toParOps[A](p: Par[A]): ParOps[A] = new ParOps(p)
-  class ParOps[A](p: Par[A]) { }
+  class ParOps[A](p: Par[A]) {}
 }
 
 object Examples {
