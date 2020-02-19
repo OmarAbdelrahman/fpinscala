@@ -16,14 +16,14 @@ case class Prop(run: (MaxSize, TestCases, RNG) => Result) {
   def &&(p: Prop): Prop = Prop { (max, n, rng) =>
     run(max, n, rng) match {
       case Passed | Proved => p.run(max, n, rng)
-      case x               => x
+      case x => x
     }
   }
 
   def ||(p: Prop): Prop = Prop { (max, n, rng) =>
     run(max, n, rng) match {
       case Falsified(msg, _) => p.tag(msg).run(max, n, rng)
-      case x                 => x
+      case x => x
     }
   }
 
@@ -121,6 +121,9 @@ object Prop {
 }
 
 object Gen {
+  val uniform: Gen[Double] = Gen(State(RNG.double))
+  val string: SGen[String] = SGen(stringN)
+
   def unit[A](a: => A): Gen[A] = {
     Gen(State(RNG.unit(a)))
   }
@@ -129,8 +132,16 @@ object Gen {
     Gen(State(RNG.boolean))
   }
 
+  def stringN(n: Int): Gen[String] = {
+    listOfN(n, choose(0, 127)).map(_.map(_.toChar).mkString)
+  }
+
   def choose(start: Int, stopExclusive: Int): Gen[Int] = {
     Gen(State(RNG.nonNegativeInt).map(r => start + r % (stopExclusive - start)))
+  }
+
+  def choose(i: Double, j: Double): Gen[Double] = {
+    Gen(State(RNG.double).map(value => i + value * (j - i)))
   }
 
   def listOfN[A](n: Int, gen: Gen[A]): Gen[List[A]] = {

@@ -11,7 +11,5 @@ subsets of the input list, where the function `f` picks a
 def filterM[A](ms: List[A])(f: A => F[Boolean]): F[List[A]] =
   ms match {
     case Nil => unit(Nil)
-    case h :: t => flatMap(f(h))(b =>
-      if (!b) filterM(t)(f)
-      else map(filterM(t)(f))(h :: _))
+    case h :: t => flatMap(f(h))(b => if (!b) filterM(t)(f) else map(filterM(t)(f))(h :: _))
   }

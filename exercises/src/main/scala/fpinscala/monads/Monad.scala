@@ -48,6 +48,26 @@ trait Monad[M[_]] extends Functor[M] {
     la.foldRight(unit(List[B]()))((a, list) => map2(f(a), list)(_ :: _))
   }
 
+  def replicateM[A](n: Int, ma: M[A]): M[List[A]] = {
+    sequence(List.fill(n)(ma))
+  }
+
+  def product[A, B](ma: M[A], mb: M[B]): M[(A, B)] = {
+    map2(ma, mb)(_ -> _)
+  }
+
+  def filterM[A](list: List[A])(f: A => M[Boolean]): M[List[A]] = {
+    list match {
+      case Nil => unit(Nil)
+      case h :: t =>
+        flatMap(f(h))(b => map(filterM(t)(f))(list => if (b) h :: list else list))
+    }
+  }
+
+  def compose[A, B, C](f: A => M[B], g: B => M[C]): A => M[C] = a => {
+    flatMap(f(a))(g)
+  }
+
   def _sequence[A](lma: List[M[A]]): M[List[A]] = {
     lma match {
       case Nil => unit(Nil)
@@ -62,23 +82,32 @@ trait Monad[M[_]] extends Functor[M] {
     }
   }
 
-  def replicateM[A](n: Int, ma: M[A]): M[List[A]] = {
-    sequence(List.fill(n)(ma))
-  }
-
   def _replicateM[A](n: Int, ma: M[A]): M[List[A]] = {
     if (n <= 0) unit(List[A]()) else map2(ma, _replicateM(n - 1, ma))(_ :: _)
   }
 
-  def compose[A, B, C](f: A => M[B], g: B => M[C]): A => M[C] = ???
+  def _filterM[A](list: List[A])(f: A => M[Boolean]): M[List[A]] = {
+    list match {
+      case Nil => unit(Nil)
+      case h :: t => flatMap(f(h))(b => if (!b) filterM(t)(f) else map(filterM(t)(f))(h :: _))
+    }
+  }
 
-  // Implement in terms of `compose`:
-  def _flatMap[A, B](ma: M[A])(f: A => M[B]): M[B] = ???
+  def _flatMap[A, B](ma: M[A])(f: A => M[B]): M[B] = {
+    compose((_: Unit) => ma, f)(())
+  }
 
-  def join[A](mma: M[M[A]]): M[A] = ???
+  def join[A](mma: M[M[A]]): M[A] = {
+    flatMap(mma)(ma => ma)
+  }
 
-  // Implement in terms of `join`:
-  def __flatMap[A, B](ma: M[A])(f: A => M[B]): M[B] = ???
+  def __flatMap[A, B](ma: M[A])(f: A => M[B]): M[B] = {
+    join(map(ma)(f))
+  }
+
+  def _compose[A, B, C](f: A => M[B], g: B => M[C]): A => M[C] = a => {
+    join(map(f(a))(g))
+  }
 }
 
 case class Reader[R, A](run: R => A)
@@ -121,13 +150,12 @@ object Monad {
 //  def readerMonad[R] = ???
 
   def main(args: Array[String]): Unit = {
-//    val list = listMonad.replicateM(3, List(5))
-//    println(list.size)
-//    list.foreach(println)
-//    val option = optionMonad.replicateM(3, Some(15))
-//    option.foreach(println)
-
-    List.fill(3)(List(1, 2, 3)).foreach(println)
+    val list = listMonad.filterM(List(1, 2, 3, 4))(n => List(n % 2 == 0, n % 2 != 0))
+    println(list.size)
+    list.foreach(println)
+    val list2 = optionMonad._filterM(List(1, 3))(n => Some(n % 2 == 0))
+    println(list2.size)
+    list2.foreach(println)
   }
 }
 
