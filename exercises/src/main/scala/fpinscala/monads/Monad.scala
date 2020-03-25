@@ -156,7 +156,7 @@ object Monad {
     override def flatMap[A, B](a: Reader[R, A])(f: A => Reader[R, B]): Reader[R, B] = a.flatMap(f)
   }
 
-  val F = stateMonad[Int]
+  val F: Monad[({ type f[X] = State[Int, X] })#f] = stateMonad[Int]
 
   def zipWithIndex[A](list: List[A]): List[(Int, A)] = {
     val state = list.foldLeft(F.unit(List[(Int, A)]())) { (acc, a) =>

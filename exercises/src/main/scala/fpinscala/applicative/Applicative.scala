@@ -9,26 +9,30 @@ import language.higherKinds
 import language.implicitConversions
 
 trait Applicative[F[_]] extends Functor[F] {
-
-  def map2[A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C] = ???
-
-  def apply[A, B](fab: F[A => B])(fa: F[A]): F[B] = ???
-
   def unit[A](a: => A): F[A]
-
   def map[A, B](fa: F[A])(f: A => B): F[B] =
     apply(unit(f))(fa)
 
-  def sequence[A](fas: List[F[A]]): F[List[A]] = ???
+  def _map[A, B](fa: F[A])(f: A => B): F[B] =
+    map2(fa, unit(()))((a, _) => f(a))
 
-  def traverse[A, B](as: List[A])(f: A => F[B]): F[List[B]] = ???
+  def map2[A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C] = ???
+  def apply[A, B](fab: F[A => B])(fa: F[A]): F[B] = ???
 
-  def replicateM[A](n: Int, fa: F[A]): F[List[A]] = ???
-
-  def factor[A, B](fa: F[A], fb: F[B]): F[(A, B)] = ???
+  def sequence[A](fas: List[F[A]]): F[List[A]] = {
+    fas.foldRight(unit(List.empty[A]))((a, fas) => map2(a, fas)(_ :: _))
+  }
+  def traverse[A, B](as: List[A])(f: A => F[B]): F[List[B]] = {
+    as.foldRight(unit(List.empty[B]))((a, fbs) => map2(f(a), fbs)(_ :: _))
+  }
+  def replicateM[A](n: Int, fa: F[A]): F[List[A]] = {
+    if (n <= 0) unit(List.empty[A]) else map2(fa, replicateM(n - 1, fa))(_ :: _)
+  }
+  def factor[A, B](fa: F[A], fb: F[B]): F[(A, B)] = {
+    map2(fa, fb)(_ -> _)
+  }
 
   def product[G[_]](G: Applicative[G]): Applicative[({ type f[x] = (F[x], G[x]) })#f] = ???
-
   def compose[G[_]](G: Applicative[G]): Applicative[({ type f[x] = F[G[x]] })#f] = ???
 
   def sequenceMap[K, V](ofa: Map[K, F[V]]): F[Map[K, V]] = ???
@@ -51,8 +55,8 @@ trait Monad[F[_]] extends Applicative[F] {
 object Monad {
   def eitherMonad[E]: Monad[({ type f[x] = Either[E, x] })#f] = ???
 
-  def stateMonad[S] = new Monad[({ type f[x] = State[S, x] })#f] {
-    def unit[A](a: => A): State[S, A] = State(s => (a, s))
+  def stateMonad[S]: Monad[({ type f[x] = State[S, x] })#f] = new Monad[({ type f[x] = State[S, x] })#f] {
+    override def unit[A](a: => A): State[S, A] = State(s => (a, s))
     override def flatMap[A, B](st: State[S, A])(f: A => State[S, B]): State[S, B] =
       st flatMap f
   }
@@ -61,21 +65,13 @@ object Monad {
 }
 
 sealed trait Validation[+E, +A]
-
 case class Failure[E](head: E, tail: Vector[E]) extends Validation[E, Nothing]
-
 case class Success[A](a: A) extends Validation[Nothing, A]
 
 object Applicative {
-
-  val streamApplicative = new Applicative[Stream] {
-
-    def unit[A](a: => A): Stream[A] =
-      Stream.continually(a) // The infinite, constant stream
-
-    override def map2[A, B, C](a: Stream[A], b: Stream[B])( // Combine elements pointwise
-      f: (A, B) => C
-    ): Stream[C] =
+  val streamApplicative: Applicative[Stream] = new Applicative[Stream] {
+    override def unit[A](a: => A): Stream[A] = Stream.continually(a) // The infinite, constant stream
+    override def map2[A, B, C](a: Stream[A], b: Stream[B])(f: (A, B) => C): Stream[C] = // Combine elements pointwise
       a zip b map f.tupled
   }
 
@@ -83,9 +79,9 @@ object Applicative {
 
   type Const[A, B] = A
 
-  implicit def monoidApplicative[M](M: Monoid[M]) =
+  implicit def monoidApplicative[M](M: Monoid[M]): Applicative[({ type f[x] = Const[M, x] })#f] =
     new Applicative[({ type f[x] = Const[M, x] })#f] {
-      def unit[A](a: => A): M = M.zero
+      override def unit[A](a: => A): M = M.zero
       override def apply[A, B](m1: M)(m2: M): M = M.op(m1, m2)
     }
 }
@@ -106,7 +102,7 @@ trait Traverse[F[_]] extends Functor[F] with Foldable[F] {
   def traverseS[S, A, B](fa: F[A])(f: A => State[S, B]): State[S, F[B]] =
     traverse[({ type f[x] = State[S, x] })#f, A, B](fa)(f)(Monad.stateMonad)
 
-  def mapAccum[S, A, B](fa: F[A], s: S)(f: (A, S) => (B, S)): (F[B], S) =
+  def mapAccumulate[S, A, B](fa: F[A], s: S)(f: (A, S) => (B, S)): (F[B], S) =
     traverseS(fa)(
       (a: A) =>
         (for {
@@ -117,10 +113,10 @@ trait Traverse[F[_]] extends Functor[F] with Foldable[F] {
     ).run(s)
 
   override def toList[A](fa: F[A]): List[A] =
-    mapAccum(fa, List[A]())((a, s) => ((), a :: s))._2.reverse
+    mapAccumulate(fa, List[A]())((a, s) => ((), a :: s))._2.reverse
 
   def zipWithIndex[A](fa: F[A]): F[(A, Int)] =
-    mapAccum(fa, 0)((a, s) => ((a, s), s + 1))._1
+    mapAccumulate(fa, 0)((a, s) => ((a, s), s + 1))._1
 
   def reverse[A](fa: F[A]): F[A] = ???
 
