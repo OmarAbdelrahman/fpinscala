@@ -13,11 +13,18 @@ trait Applicative[F[_]] extends Functor[F] {
   def map[A, B](fa: F[A])(f: A => B): F[B] =
     apply(unit(f))(fa)
 
-  def _map[A, B](fa: F[A])(f: A => B): F[B] =
-    map2(fa, unit(()))((a, _) => f(a))
+  def map2[A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C] = {
+    apply(map(fa)(f.curried))(fb)
+  }
+  def map3[A, B, C, D](fa: F[A], fb: F[B], fc: F[C])(f: (A, B, C) => D): F[D] = {
+    apply(apply(map(fa)(f.curried))(fb))(fc)
+  }
+  def map4[A, B, C, D, E](fa: F[A], fb: F[B], fc: F[C], fd: F[D])(f: (A, B, C, D) => E): F[E] = {
+    apply(apply(apply(map(fa)(f.curried)(fb)))(fc))(fd)
+  }
 
-  def map2[A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C] = ???
-  def apply[A, B](fab: F[A => B])(fa: F[A]): F[B] = ???
+  def apply[A, B](fab: F[A => B])(fa: F[A]): F[B] =
+    map2(fab, fa)((ab, a) => ab(a))
 
   def sequence[A](fas: List[F[A]]): F[List[A]] = {
     fas.foldRight(unit(List.empty[A]))((a, fas) => map2(a, fas)(_ :: _))
@@ -36,6 +43,9 @@ trait Applicative[F[_]] extends Functor[F] {
   def compose[G[_]](G: Applicative[G]): Applicative[({ type f[x] = F[G[x]] })#f] = ???
 
   def sequenceMap[K, V](ofa: Map[K, F[V]]): F[Map[K, V]] = ???
+
+  def _map[A, B](fa: F[A])(f: A => B): F[B] =
+    map2(fa, unit(()))((a, _) => f(a))
 }
 
 case class Tree[+A](head: A, tail: List[Tree[A]])
