@@ -98,6 +98,14 @@ object Applicative {
       override def unit[A](a: => A): M = M.zero
       override def apply[A, B](m1: M)(m2: M): M = M.op(m1, m2)
     }
+
+  def main(args: Array[String]): Unit = {
+    val x: List[Stream[Int]] = List.fill(5)(Stream(1, 2, 3, 4, 5))
+    println(x)
+    x.foreach(v => println(v))
+    val z = streamApplicative.sequence(x)
+    println(z.take(3).toList)
+  }
 }
 
 trait Traverse[F[_]] extends Functor[F] with Foldable[F] {
