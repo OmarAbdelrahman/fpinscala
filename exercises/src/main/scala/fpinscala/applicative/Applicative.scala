@@ -51,9 +51,11 @@ trait Applicative[F[_]] extends Functor[F] {
 case class Tree[+A](head: A, tail: List[Tree[A]])
 
 trait Monad[F[_]] extends Applicative[F] {
-  def flatMap[A, B](ma: F[A])(f: A => F[B]): F[B] = join(map(ma)(f))
+  def flatMap[A, B](ma: F[A])(f: A => F[B]): F[B] =
+    join(map(ma)(f))
 
-  def join[A](mma: F[F[A]]): F[A] = flatMap(mma)(ma => ma)
+  def join[A](mma: F[F[A]]): F[A] =
+    flatMap(mma)(ma => ma)
 
   def compose[A, B, C](f: A => F[B], g: B => F[C]): A => F[C] =
     a => flatMap(f(a))(g)
@@ -63,12 +65,14 @@ trait Monad[F[_]] extends Applicative[F] {
 }
 
 object Monad {
-  def eitherMonad[E]: Monad[({ type f[x] = Either[E, x] })#f] = ???
+  def eitherMonad[E]: Monad[({ type f[x] = Either[E, x] })#f] = new Monad[({ type f[x] = Either[E, x] })#f] {
+    override def unit[A](a: => A): Either[E, A] = Right(a)
+    override def flatMap[A, B](ma: Either[E, A])(f: A => Either[E, B]): Either[E, B] = ma.flatMap(f)
+  }
 
   def stateMonad[S]: Monad[({ type f[x] = State[S, x] })#f] = new Monad[({ type f[x] = State[S, x] })#f] {
     override def unit[A](a: => A): State[S, A] = State(s => (a, s))
-    override def flatMap[A, B](st: State[S, A])(f: A => State[S, B]): State[S, B] =
-      st flatMap f
+    override def flatMap[A, B](st: State[S, A])(f: A => State[S, B]): State[S, B] = st.flatMap(f)
   }
 
   def composeM[F[_], N[_]](implicit F: Monad[F], N: Monad[N], T: Traverse[N]): Monad[({ type f[x] = F[N[x]] })#f] = ???
