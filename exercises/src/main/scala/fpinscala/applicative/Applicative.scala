@@ -20,7 +20,7 @@ trait Applicative[F[_]] extends Functor[F] {
     apply(apply(map(fa)(f.curried))(fb))(fc)
   }
   def map4[A, B, C, D, E](fa: F[A], fb: F[B], fc: F[C], fd: F[D])(f: (A, B, C, D) => E): F[E] = {
-    apply(apply(apply(map(fa)(f.curried)(fb)))(fc))(fd)
+    apply(apply(apply(map(fa)(f.curried))(fb))(fc))(fd)
   }
 
   def apply[A, B](fab: F[A => B])(fa: F[A]): F[B] =
