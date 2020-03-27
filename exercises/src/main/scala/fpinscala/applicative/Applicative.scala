@@ -1,12 +1,16 @@
 package fpinscala
 package applicative
 
+import java.util.Date
+import java.text.SimpleDateFormat
+
 import monads.Functor
 import state._
 import State._
 import monoids._
 import language.higherKinds
 import language.implicitConversions
+import scala.util.Try
 
 trait Applicative[F[_]] extends Functor[F] {
   def unit[A](a: => A): F[A]
@@ -67,7 +71,10 @@ trait Monad[F[_]] extends Applicative[F] {
 object Monad {
   def eitherMonad[E]: Monad[({ type f[x] = Either[E, x] })#f] = new Monad[({ type f[x] = Either[E, x] })#f] {
     override def unit[A](a: => A): Either[E, A] = Right(a)
-    override def flatMap[A, B](ma: Either[E, A])(f: A => Either[E, B]): Either[E, B] = ma.flatMap(f)
+    override def flatMap[A, B](ma: Either[E, A])(f: A => Either[E, B]): Either[E, B] = ma match {
+      case Left(value)  => Left(value)
+      case Right(value) => f(value)
+    }
   }
 
   def stateMonad[S]: Monad[({ type f[x] = State[S, x] })#f] = new Monad[({ type f[x] = State[S, x] })#f] {
@@ -79,19 +86,34 @@ object Monad {
 }
 
 sealed trait Validation[+E, +A]
-case class Failure[E](head: E, tail: Vector[E]) extends Validation[E, Nothing]
+case class Failure[E](head: E, tail: Vector[E] = Vector()) extends Validation[E, Nothing]
 case class Success[A](a: A) extends Validation[Nothing, A]
 
 object Applicative {
+  type Const[A, B] = A
+
+  case class WebForm(name: String, birthdate: Date, phoneNumber: String)
+
   val streamApplicative: Applicative[Stream] = new Applicative[Stream] {
     override def unit[A](a: => A): Stream[A] = Stream.continually(a) // The infinite, constant stream
     override def map2[A, B, C](a: Stream[A], b: Stream[B])(f: (A, B) => C): Stream[C] = // Combine elements pointwise
       a zip b map f.tupled
   }
 
-  def validationApplicative[E]: Applicative[({ type f[x] = Validation[E, x] })#f] = ???
-
-  type Const[A, B] = A
+  def validationApplicative[E]: Applicative[({ type f[x] = Validation[E, x] })#f] = new Applicative[({ type f[x] = Validation[E, x] })#f] {
+    override def unit[A](a: => A): Validation[E, A] = Success(a)
+    override def map2[A, B, C](fa: Validation[E, A], fb: Validation[E, B])(f: (A, B) => C): Validation[E, C] =
+      (fa, fb) match {
+        case (Success(a), Success(b)) =>
+          Success(f(a, b))
+        case (Failure(h1, t1), Failure(h2, t2)) =>
+          Failure(h1, t1 ++ Vector(h2) ++ t2)
+        case (failure@Failure(_, _), _) =>
+          failure
+        case (_, failure@Failure(_, _)) =>
+          failure
+      }
+  }
 
   implicit def monoidApplicative[M](M: Monoid[M]): Applicative[({ type f[x] = Const[M, x] })#f] =
     new Applicative[({ type f[x] = Const[M, x] })#f] {
@@ -99,12 +121,30 @@ object Applicative {
       override def apply[A, B](m1: M)(m2: M): M = M.op(m1, m2)
     }
 
+  def validName(name: String): Validation[String, String] = {
+    if (name != "") Success(name)
+    else Failure("Name can not be empty")
+  }
+  def validBirthdate(birthdate: String): Validation[String, Date] = {
+    Try {
+      import java.text._
+      (new SimpleDateFormat("yyyy-MM-dd")).parse(birthdate)
+    } match {
+      case util.Failure(exception) => Failure("Birthdate must be in the form yyyy-MM-dd")
+      case util.Success(value) => Success(value)
+    }
+  }
+  def validPhone(phoneNumber: String): Validation[String, String] = {
+    if (phoneNumber.matches("[0-9]{10}")) Success(phoneNumber)
+    else Failure("Phone number must be 10 digits")
+  }
+  def validWebForm(name: String, birthdate: String, phone: String): Validation[String, WebForm] = {
+    validationApplicative.map3(validName(name), validBirthdate(birthdate), validPhone(phone))(WebForm(_, _, _))
+  }
+
   def main(args: Array[String]): Unit = {
-    val x: List[Stream[Int]] = List.fill(5)(Stream(1, 2, 3, 4, 5))
-    println(x)
-    x.foreach(v => println(v))
-    val z = streamApplicative.sequence(x)
-    println(z.take(3).toList)
+    val result = validWebForm("name", "0000-00-00", "0123456789")
+    println(result)
   }
 }
 
