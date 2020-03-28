@@ -72,8 +72,6 @@ trait Applicative[F[_]] extends Functor[F] {
     map2(fa, unit(()))((a, _) => f(a))
 }
 
-case class Tree[+A](head: A, tail: List[Tree[A]])
-
 trait Monad[F[_]] extends Applicative[F] {
   def flatMap[A, B](ma: F[A])(f: A => F[B]): F[B] =
     join(map(ma)(f))
@@ -168,13 +166,23 @@ object Applicative {
   }
 }
 
+case class Tree[+A](head: A, tail: List[Tree[A]])
+
 trait Traverse[F[_]] extends Functor[F] with Foldable[F] {
   def traverse[G[_]: Applicative, A, B](fa: F[A])(f: A => G[B]): G[F[B]] =
     sequence(map(fa)(f))
   def sequence[G[_]: Applicative, A](fma: F[G[A]]): G[F[A]] =
     traverse(fma)(ma => ma)
 
-  def map[A, B](fa: F[A])(f: A => B): F[B] = ???
+  type Id[A] = A
+
+  private val idMonad: Monad[Id] = new Monad[Id] {
+    override def unit[A](a: => A): Id[A] = a
+    override def flatMap[A, B](a: Id[A])(f: A => Id[B]): Id[B] = f(a)
+  }
+
+  def map[A, B](fa: F[A])(f: A => B): F[B] =
+    traverse[Id, A, B](fa)(f)(idMonad)
 
   import Applicative._
 
