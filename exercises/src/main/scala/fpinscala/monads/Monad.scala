@@ -1,6 +1,13 @@
 package fpinscala
 package monads
 
+import java.io.{File, PrintWriter}
+import java.sql.Timestamp
+import java.text.SimpleDateFormat
+import java.time.temporal.{ChronoField, ChronoUnit, IsoFields, WeekFields}
+import java.time.{Duration, Instant, LocalDate, LocalDateTime, OffsetDateTime, ZoneId, ZoneOffset, ZonedDateTime}
+import java.util.{Locale, UUID}
+
 import fpinscala.parallelism.Par.Par
 import parsing._
 import testing._
@@ -40,74 +47,60 @@ trait Monad[M[_]] extends Functor[M] {
   def map2[A, B, C](a: M[A], b: M[B])(f: (A, B) => C): M[C] =
     flatMap(a)(a => map(b)(b => f(a, b)))
 
-  def sequence[A](lma: List[M[A]]): M[List[A]] = {
+  def sequence[A](lma: List[M[A]]): M[List[A]] =
     lma.foldRight(unit(List[A]()))((ma, list) => map2(ma, list)(_ :: _))
-  }
 
-  def traverse[A, B](la: List[A])(f: A => M[B]): M[List[B]] = {
+  def traverse[A, B](la: List[A])(f: A => M[B]): M[List[B]] =
     la.foldRight(unit(List[B]()))((a, list) => map2(f(a), list)(_ :: _))
-  }
 
-  def replicateM[A](n: Int, ma: M[A]): M[List[A]] = {
+  def replicateM[A](n: Int, ma: M[A]): M[List[A]] =
     sequence(List.fill(n)(ma))
-  }
 
-  def product[A, B](ma: M[A], mb: M[B]): M[(A, B)] = {
+  def product[A, B](ma: M[A], mb: M[B]): M[(A, B)] =
     map2(ma, mb)(_ -> _)
-  }
 
-  def filterM[A](list: List[A])(f: A => M[Boolean]): M[List[A]] = {
+  def filterM[A](list: List[A])(f: A => M[Boolean]): M[List[A]] =
     list match {
       case Nil => unit(Nil)
       case h :: t =>
         flatMap(f(h))(b => map(filterM(t)(f))(list => if (b) h :: list else list))
     }
-  }
 
-  def compose[A, B, C](f: A => M[B], g: B => M[C]): A => M[C] = a => {
+  def compose[A, B, C](f: A => M[B], g: B => M[C]): A => M[C] = a =>
     flatMap(f(a))(g)
-  }
 
-  def _sequence[A](lma: List[M[A]]): M[List[A]] = {
+  def _sequence[A](lma: List[M[A]]): M[List[A]] =
     lma match {
       case Nil => unit(Nil)
       case h :: t => flatMap(h)(m => map(_sequence(t))(list => m :: list))
     }
-  }
 
-  def _traverse[A, B](la: List[A])(f: A => M[B]): M[List[B]] = {
+  def _traverse[A, B](la: List[A])(f: A => M[B]): M[List[B]] =
     la match {
       case Nil => unit(Nil)
       case h :: t => flatMap(f(h))(b => map(_traverse(t)(f))(list => b :: list))
     }
-  }
 
-  def _replicateM[A](n: Int, ma: M[A]): M[List[A]] = {
+  def _replicateM[A](n: Int, ma: M[A]): M[List[A]] =
     if (n <= 0) unit(List[A]()) else map2(ma, _replicateM(n - 1, ma))(_ :: _)
-  }
 
-  def _filterM[A](list: List[A])(f: A => M[Boolean]): M[List[A]] = {
+  def _filterM[A](list: List[A])(f: A => M[Boolean]): M[List[A]] =
     list match {
       case Nil => unit(Nil)
       case h :: t => flatMap(f(h))(b => if (!b) filterM(t)(f) else map(filterM(t)(f))(h :: _))
     }
-  }
 
-  def _flatMap[A, B](ma: M[A])(f: A => M[B]): M[B] = {
+  def _flatMap[A, B](ma: M[A])(f: A => M[B]): M[B] =
     compose((_: Unit) => ma, f)(())
-  }
 
-  def join[A](mma: M[M[A]]): M[A] = {
+  def join[A](mma: M[M[A]]): M[A] =
     flatMap(mma)(ma => ma)
-  }
 
-  def __flatMap[A, B](ma: M[A])(f: A => M[B]): M[B] = {
+  def __flatMap[A, B](ma: M[A])(f: A => M[B]): M[B] =
     join(map(ma)(f))
-  }
 
-  def _compose[A, B, C](f: A => M[B], g: B => M[C]): A => M[C] = a => {
+  def _compose[A, B, C](f: A => M[B], g: B => M[C]): A => M[C] = a =>
     join(map(f(a))(g))
-  }
 }
 
 object Monad {
@@ -146,12 +139,12 @@ object Monad {
     override def flatMap[A, B](a: Id[A])(f: A => Id[B]): Id[B] = a.flatMap(f)
   }
 
-  def stateMonad[S]: Monad[({type f[X] = State[S, X]})#f] = new Monad[({ type f[X] = State[S, X] })#f] {
+  def stateMonad[S]: Monad[({ type f[X] = State[S, X] })#f] = new Monad[({ type f[X] = State[S, X] })#f] {
     override def unit[A](a: => A): State[S, A] = State(s => (a, s))
     override def flatMap[A, B](a: State[S, A])(f: A => State[S, B]): State[S, B] = a.flatMap(f)
   }
 
-  def readerMonad[R]: Monad[({type f[x] = Reader[R, x]})#f] = new Monad[({type f[x] = Reader[R, x]})#f] {
+  def readerMonad[R]: Monad[({ type f[x] = Reader[R, x] })#f] = new Monad[({ type f[x] = Reader[R, x] })#f] {
     override def unit[A](a: => A): Reader[R, A] = Reader(_ => a)
     override def flatMap[A, B](a: Reader[R, A])(f: A => Reader[R, B]): Reader[R, B] = a.flatMap(f)
   }
@@ -170,7 +163,6 @@ object Monad {
   }
 
   def main(args: Array[String]): Unit = {
-    println(zipWithIndex(List(1, 2, 3, 4)))
   }
 }
 

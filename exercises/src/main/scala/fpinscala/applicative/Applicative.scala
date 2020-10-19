@@ -2,7 +2,6 @@ package fpinscala
 package applicative
 
 import java.util.Date
-import java.text.SimpleDateFormat
 
 import monads.Functor
 import state._
@@ -17,31 +16,29 @@ trait Applicative[F[_]] extends Functor[F] {
   def map[A, B](fa: F[A])(f: A => B): F[B] =
     apply(unit(f))(fa)
 
-  def map2[A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C] = {
+  def map2[A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C] =
     apply(map(fa)(f.curried))(fb)
-  }
-  def map3[A, B, C, D](fa: F[A], fb: F[B], fc: F[C])(f: (A, B, C) => D): F[D] = {
+
+  def map3[A, B, C, D](fa: F[A], fb: F[B], fc: F[C])(f: (A, B, C) => D): F[D] =
     apply(apply(map(fa)(f.curried))(fb))(fc)
-  }
-  def map4[A, B, C, D, E](fa: F[A], fb: F[B], fc: F[C], fd: F[D])(f: (A, B, C, D) => E): F[E] = {
+
+  def map4[A, B, C, D, E](fa: F[A], fb: F[B], fc: F[C], fd: F[D])(f: (A, B, C, D) => E): F[E] =
     apply(apply(apply(map(fa)(f.curried))(fb))(fc))(fd)
-  }
 
   def apply[A, B](fab: F[A => B])(fa: F[A]): F[B] =
     map2(fab, fa)((ab, a) => ab(a))
 
-  def sequence[A](fas: List[F[A]]): F[List[A]] = {
+  def sequence[A](fas: List[F[A]]): F[List[A]] =
     fas.foldRight(unit(List.empty[A]))((a, fas) => map2(a, fas)(_ :: _))
-  }
-  def traverse[A, B](as: List[A])(f: A => F[B]): F[List[B]] = {
+
+  def traverse[A, B](as: List[A])(f: A => F[B]): F[List[B]] =
     as.foldRight(unit(List.empty[B]))((a, fbs) => map2(f(a), fbs)(_ :: _))
-  }
-  def replicateM[A](n: Int, fa: F[A]): F[List[A]] = {
+
+  def replicateM[A](n: Int, fa: F[A]): F[List[A]] =
     if (n <= 0) unit(List.empty[A]) else map2(fa, replicateM(n - 1, fa))(_ :: _)
-  }
-  def factor[A, B](fa: F[A], fb: F[B]): F[(A, B)] = {
+
+  def factor[A, B](fa: F[A], fb: F[B]): F[(A, B)] =
     map2(fa, fb)(_ -> _)
-  }
 
   def product[G[_]](G: Applicative[G]): Applicative[({ type f[x] = (F[x], G[x]) })#f] = {
     val self = this
@@ -61,12 +58,11 @@ trait Applicative[F[_]] extends Functor[F] {
     }
   }
 
-  def sequenceMap[K, V](ofa: Map[K, F[V]]): F[Map[K, V]] = {
+  def sequenceMap[K, V](ofa: Map[K, F[V]]): F[Map[K, V]] =
     ofa.foldRight(unit(Map.empty[K, V])) {
       case ((key, fvalue), fmap) =>
         map2(fvalue, fmap)((value, map) => map + (key -> value))
     }
-  }
 
   def _map[A, B](fa: F[A])(f: A => B): F[B] =
     map2(fa, unit(()))((a, _) => f(a))
@@ -79,11 +75,17 @@ trait Monad[F[_]] extends Applicative[F] {
   def join[A](mma: F[F[A]]): F[A] =
     flatMap(mma)(ma => ma)
 
+  override def apply[A,B](mf: F[A => B])(ma: F[A]): F[B] =
+    flatMap(mf)(f => map(ma)(f))
+
+  override def map[A,B](m: F[A])(f: A => B): F[B] =
+    flatMap(m)(a => unit(f(a)))
+
+  override def map2[A,B,C](ma: F[A], mb: F[B])(f: (A, B) => C): F[C] =
+    flatMap(ma)(a => map(mb)(b => f(a, b)))
+
   def compose[A, B, C](f: A => F[B], g: B => F[C]): A => F[C] =
     a => flatMap(f(a))(g)
-
-  override def apply[A, B](mf: F[A => B])(ma: F[A]): F[B] =
-    flatMap(mf)(f => map(ma)(a => f(a)))
 }
 
 object Monad {
@@ -120,17 +122,16 @@ object Applicative {
 
   def validationApplicative[E]: Applicative[({ type f[x] = Validation[E, x] })#f] = new Applicative[({ type f[x] = Validation[E, x] })#f] {
     override def unit[A](a: => A): Validation[E, A] = Success(a)
-    override def map2[A, B, C](fa: Validation[E, A], fb: Validation[E, B])(f: (A, B) => C): Validation[E, C] =
-      (fa, fb) match {
-        case (Success(a), Success(b)) =>
-          Success(f(a, b))
-        case (Failure(h1, t1), Failure(h2, t2)) =>
-          Failure(h1, t1 ++ Vector(h2) ++ t2)
-        case (failure@Failure(_, _), _) =>
-          failure
-        case (_, failure@Failure(_, _)) =>
-          failure
-      }
+    override def map2[A, B, C](fa: Validation[E, A], fb: Validation[E, B])(f: (A, B) => C): Validation[E, C] = (fa, fb) match {
+      case (Success(a), Success(b)) =>
+        Success(f(a, b))
+      case (Failure(h1, t1), Failure(h2, t2)) =>
+        Failure(h1, t1 ++ Vector(h2) ++ t2)
+      case (failure @ Failure(_, _), _) =>
+        failure
+      case (_, failure @ Failure(_, _)) =>
+        failure
+    }
   }
 
   implicit def monoidApplicative[M](M: Monoid[M]): Applicative[({ type f[x] = Const[M, x] })#f] =
@@ -146,9 +147,9 @@ object Applicative {
   def validBirthdate(birthdate: String): Validation[String, Date] = {
     Try {
       import java.text._
-      (new SimpleDateFormat("yyyy-MM-dd")).parse(birthdate)
+      new SimpleDateFormat("yyyy-MM-dd").parse(birthdate)
     } match {
-      case util.Failure(exception) => Failure("Birthdate must be in the form yyyy-MM-dd")
+      case util.Failure(_) => Failure("Birthdate must be in the form yyyy-MM-dd")
       case util.Success(value) => Success(value)
     }
   }
@@ -157,12 +158,7 @@ object Applicative {
     else Failure("Phone number must be 10 digits")
   }
   def validWebForm(name: String, birthdate: String, phone: String): Validation[String, WebForm] = {
-    validationApplicative.map3(validName(name), validBirthdate(birthdate), validPhone(phone))(WebForm(_, _, _))
-  }
-
-  def main(args: Array[String]): Unit = {
-    val result = validWebForm("name", "0000-00-00", "0123456789")
-    println(result)
+    validationApplicative.map3(validName(name), validBirthdate(birthdate), validPhone(phone))(WebForm)
   }
 }
 
@@ -195,11 +191,11 @@ trait Traverse[F[_]] extends Functor[F] with Foldable[F] {
   def mapAccumulate[S, A, B](fa: F[A], s: S)(f: (A, S) => (B, S)): (F[B], S) =
     traverseS(fa)(
       (a: A) =>
-        (for {
+        for {
           s1 <- get[S]
           (b, s2) = f(a, s1)
           _ <- set(s2)
-        } yield b)
+        } yield b
     ).run(s)
 
   override def toList[A](fa: F[A]): List[A] =
@@ -208,9 +204,11 @@ trait Traverse[F[_]] extends Functor[F] with Foldable[F] {
   def zipWithIndex[A](fa: F[A]): F[(A, Int)] =
     mapAccumulate(fa, 0)((a, s) => ((a, s), s + 1))._1
 
-  def reverse[A](fa: F[A]): F[A] = ???
+  def reverse[A](fa: F[A]): F[A] =
+    mapAccumulate(fa, toList(fa).reverse)((_, list) => (list.head, list.tail))._1
 
-  override def foldLeft[A, B](fa: F[A])(z: B)(f: (B, A) => B): B = ???
+  override def foldLeft[A, B](fa: F[A])(z: B)(f: (B, A) => B): B =
+    mapAccumulate(fa, z)((a, b) => ((), f(b, a)))._2
 
   def fuse[G[_], H[_], A, B](fa: F[A])(f: A => G[B], g: A => H[B])(implicit G: Applicative[G], H: Applicative[H]): (G[F[B]], H[F[B]]) = ???
 
@@ -218,9 +216,27 @@ trait Traverse[F[_]] extends Functor[F] with Foldable[F] {
 }
 
 object Traverse {
-  val listTraverse = ???
+  val list: Traverse[List] = new Traverse[List] {
+    override def traverse[G[_], A, B](fa: List[A])(f: A => G[B])(implicit G: Applicative[G]): G[List[B]] =
+      fa.foldRight(G.unit(List[B]()))((a, fbs) => G.map2(f(a), fbs)(_ :: _))
+  }
 
-  val optionTraverse = ???
+  val option: Traverse[Option] = new Traverse[Option] {
+    override def traverse[G[_], A, B](fa: Option[A])(f: A => G[B])(implicit G: Applicative[G]): G[Option[B]] =
+      fa match {
+        case Some(value) => G.map(f(value))(Some(_))
+        case None => G.unit(None)
+      }
+  }
 
-  val treeTraverse = ???
+  val tree: Traverse[Tree] = new Traverse[Tree] {
+    override def traverse[G[_], A, B](fa: Tree[A])(f: A => G[B])(implicit G: Applicative[G]): G[Tree[B]] =
+      G.map2(f(fa.head), list.traverse(fa.tail)(tree => traverse(tree)(f)))(Tree(_, _))
+  }
+
+  def main(args: Array[String]): Unit = {
+    val a = List(1, 2, 3)
+    val x = list.reverse(a)
+    println(x)
+  }
 }

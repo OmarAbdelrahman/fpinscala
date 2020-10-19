@@ -6,7 +6,8 @@ lazy val root = (project in file("."))
   .aggregate(exercises, answers)
   .settings(commonSettings)
   .settings(
-    name := "fpinscala"
+    name := "fpinscala",
+    libraryDependencies ++= Seq("com.norbitltd" %% "spoiwo" % "1.7.0")
   )
 
 lazy val exercises = (project in file("exercises"))

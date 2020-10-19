@@ -206,21 +206,20 @@ object Monoid {
 trait Foldable[F[_]] {
   //import Monoid._
 
-  def foldRight[A, B](as: F[A])(z: B)(f: (A, B) => B): B = {
+  def foldRight[A, B](as: F[A])(z: B)(f: (A, B) => B): B =
     foldMap(as)(f.curried)(Monoid.composeMonoid)(z)
-  }
-  def foldLeft[A, B](as: F[A])(z: B)(f: (B, A) => B): B = {
+
+  def foldLeft[A, B](as: F[A])(z: B)(f: (B, A) => B): B =
     foldMap(as)(a => (b: B) => f(b, a))(Monoid.andThenMonoid)(z)
-  }
-  def foldMap[A, B](as: F[A])(f: A => B)(monoid: Monoid[B]): B = {
+
+  def foldMap[A, B](as: F[A])(f: A => B)(monoid: Monoid[B]): B =
     foldLeft(as)(monoid.zero)((b, a) => monoid.op(f(a), b))
-  }
-  def concatenate[A](as: F[A])(monoid: Monoid[A]): A = {
+
+  def concatenate[A](as: F[A])(monoid: Monoid[A]): A =
     foldLeft(as)(monoid.zero)(monoid.op)
-  }
-  def toList[A](as: F[A]): List[A] = {
+
+  def toList[A](as: F[A]): List[A] =
     foldRight(as)(List[A]())(_ :: _)
-  }
 }
 
 object ListFoldable extends Foldable[List] {
